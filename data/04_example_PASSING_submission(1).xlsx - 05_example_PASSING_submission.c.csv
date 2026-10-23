@@ -1,0 +1,2 @@
+applicant_name,project_name,facility_type,nameplate_capacity_mw,poi_substation,requested_voltage_kv,gen_tie_required,gen_tie_length_miles,requested_inservice_date,deposit_submitted,deposit_amount
+Meridian Solar Partners,Sunfield I,Solar,40,Red Rock,138,Yes,8,2029-01-15,Yes,60000
