@@ -3,7 +3,6 @@ Hackathon
 https://methodhackathon-v5arteionw97bxspvmxqec.streamlit.app/
 
 # Interconnection Intake Gatekeeper
-
 ---
 
 ## Project Structure
@@ -12,7 +11,7 @@ https://methodhackathon-v5arteionw97bxspvmxqec.streamlit.app/
 Method Hackathon/
 ├── app.py                      # Main Streamlit user interface and frontend runner
 ├── requirements.txt            # Python package dependencies needed to run the app
-├── test_backend.py             # Automated testing script to verify validation logic
+├── test_backend.py             # Automated testing script to verify backend validation logic
 ├── backend/                    # Core logic package for validation and data processing
 │   ├── __init__.py             # Marks the folder as a Python package
 │   ├── adapter.py              # Data formatting and adaptation layer
