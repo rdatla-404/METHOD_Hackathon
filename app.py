@@ -7,13 +7,14 @@ import io
 import json
 import re
 import sqlite3
+import zipfile
+import xml.etree.ElementTree as ET
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 import streamlit as st
-from docx import Document
 from pypdf import PdfReader
 
 
@@ -117,11 +118,21 @@ def key_value_frame(lines: list[str], label: str) -> pd.DataFrame:
 
 
 def read_docx(data: bytes) -> pd.DataFrame:
-    doc = Document(io.BytesIO(data))
+    # DOCX is a ZIP package containing OOXML; parse it with the standard library
+    # so the app does not fail to start when python-docx is absent in deployment.
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as package:
+            root = ET.fromstring(package.read("word/document.xml"))
+    except (zipfile.BadZipFile, KeyError, ET.ParseError) as exc:
+        raise ValueError("This .docx file is invalid or unreadable.") from exc
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    def cell_text(element) -> str:
+        return "".join(node.text or "" for node in element.findall(".//w:t", ns)).strip()
+
     pairs = {}
     frames = []
-    for table in doc.tables:
-        rows = [[cell.text.strip() for cell in row.cells] for row in table.rows]
+    for table in root.findall(".//w:tbl", ns):
+        rows = [[cell_text(cell) for cell in row.findall("./w:tc", ns)] for row in table.findall("./w:tr", ns)]
         rows = [row for row in rows if any(row)]
         if not rows:
             continue
@@ -135,15 +146,16 @@ def read_docx(data: bytes) -> pd.DataFrame:
         elif len(rows) > 1:
             width = len(headers)
             frames.append(pd.DataFrame([r[:width] + [""] * max(0, width-len(r)) for r in rows[1:]], columns=headers))
-    for paragraph in doc.paragraphs:
-        parsed = key_value_frame([paragraph.text], "Word document") if paragraph.text.strip() else None
+    paragraphs = [cell_text(p) for p in root.findall(".//w:p", ns)]
+    for text in paragraphs:
+        parsed = key_value_frame([text], "Word document") if text else None
         if parsed is not None and "Document text (review required)" not in parsed.columns:
             pairs.update(parsed.iloc[0].to_dict())
     if pairs:
         return pd.DataFrame([pairs])
     if frames:
         return frames[0]
-    return key_value_frame([p.text for p in doc.paragraphs], "Word document")
+    return key_value_frame(paragraphs, "Word document")
 
 
 def validate_submission(frame: pd.DataFrame, refs: dict[str, pd.DataFrame], authoritative: dict[str, bool]) -> list[dict]:
