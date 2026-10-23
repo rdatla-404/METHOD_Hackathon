@@ -16,7 +16,7 @@ def _closest(value, candidates, n=3):
 def _no_table(check_name, field, needs):
     return Issue(check_name, WARNING, field,
                  f"Could not verify: no reference extract with columns {needs} is loaded.",
-                 "Upload the NE-RTO extract and check again.", "Reference data unavailable")
+                 "Contact NE-RTO: the backend reference data is missing.", "Reference data unavailable")
 
 
 def _match_substation(sub, ref):
@@ -32,11 +32,11 @@ def _match_substation(sub, ref):
     return "ok", (col, val, tname, df, hit.index[0])
 
 
-@check
+@check("Applicant is registered and Active")
 def applicant_registered(sub, ref):
     col, val = get(sub, "applicant")
     if blank(val):
-        return []
+        return None
     tname, df = find_table(ref, APPLICANT_COLS)
     if df is None:
         return [_no_table("applicant_registered", col, APPLICANT_COLS)]
@@ -49,21 +49,19 @@ def applicant_registered(sub, ref):
                       src, suggestions=_closest(val, df["applicant_name"]))]
     i = hit.index[0]
     status = str(hit.loc[i, "status"]).strip()
-    row = str(i + 2)
-    if status.casefold() == "suspended":
-        return [Issue("applicant_registered", BLOCKER, col,
-                      f"'{val}' is registered but its status is Suspended.",
-                      "Resolve the suspension with NE-RTO before submitting.", src, row)]
     if status.casefold() != "active":
-        return [Issue("applicant_registered", WARNING, col,
-                      f"'{val}' has registration status '{status}', not Active.",
-                      "Confirm with NE-RTO that a non-Active registration can file.", src, row)]
+        return [Issue("applicant_registered", BLOCKER, col,
+                      f"'{val}' is registered but its status is {status}, not Active.",
+                      "Only Active applicants can file. Resolve the status with NE-RTO before submitting.",
+                      src, str(i + 2))]
     return []
 
 
-@check
+@check("Substation exists in the NE-RTO substation list")
 def poi_exists(sub, ref):
     state, ctx = _match_substation(sub, ref)
+    if state == "skip":
+        return None
     if state == "notable":
         return [_no_table("poi_exists", get(sub, "poi")[0], SUBSTATION_COLS)]
     if state != "notfound":
@@ -75,18 +73,19 @@ def poi_exists(sub, ref):
                   suggestions=_closest(val, df["substation_name"]))]
 
 
-@check
+@check("Requested voltage matches the substation's rated voltage")
 def voltage_matches(sub, ref):
     state, ctx = _match_substation(sub, ref)
+    if state in ("skip", "notfound"):
+        return None
     if state == "notable":
         return [_no_table("voltage_matches", get(sub, "poi")[0], SUBSTATION_COLS)]
-    if state != "ok":
-        return []
     _, poi, tname, df, i = ctx
     vcol, vval = get(sub, "voltage")
     v = num(vval)
     if v is None:
-        return []
+        return [Issue("voltage_matches", BLOCKER, vcol, "Requested voltage is missing or not a number.",
+                      "Enter the requested voltage in kV.", "Submission (format)")] if not blank(vval) else None
     rated = float(df.loc[i, "rated_voltage_kv"])
     if v == rated:
         return []
@@ -98,18 +97,18 @@ def voltage_matches(sub, ref):
                   src_label(tname, "rated_voltage_kv"), str(i + 2), suggestions=same_v)]
 
 
-@check
+@check("Capacity fits within the substation's available hosting capacity")
 def capacity_fits(sub, ref):
     state, ctx = _match_substation(sub, ref)
+    if state in ("skip", "notfound"):
+        return None
     if state == "notable":
         return [_no_table("capacity_fits", get(sub, "poi")[0], SUBSTATION_COLS)]
-    if state != "ok":
-        return []
     _, poi, tname, df, i = ctx
     ccol, cval = get(sub, "capacity")
     mw = num(cval)
     if mw is None or mw <= 0:
-        return []
+        return None
     room = float(df.loc[i, "available_hosting_capacity_mw"])
     if mw <= room:
         return []

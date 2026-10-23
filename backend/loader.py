@@ -1,3 +1,5 @@
+"""Loads the NE-RTO extracts that ship with the backend (data/). Users never upload these."""
+import hashlib
 from pathlib import Path
 import pandas as pd
 
@@ -16,3 +18,9 @@ def load_reference():
             elif p.suffix in (".xlsx", ".xls"):
                 _cache[p.name] = pd.read_excel(p, dtype=object)  # first sheet
     return _cache
+
+
+def reference_fingerprint():
+    """{file name: sha256} of the extracts in use, recorded with every check for audit."""
+    return {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(DATA_DIR.glob("*")) if p.suffix in (".csv", ".xlsx", ".xls")}

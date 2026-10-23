@@ -11,16 +11,22 @@ def yes(v):
     return str(v).strip().lower() in ("yes", "y", "true", "1")
 
 
+def no(v):
+    return str(v).strip().lower() in ("no", "n", "false", "0")
+
+
 def num(v):
-    """float or None."""
+    """float or None. Tolerates '$60,000' and '40 MW'-style typing."""
     if blank(v):
         return None
+    if isinstance(v, str):
+        v = re.sub(r"[,$\s]|mw$|kv$|miles?$", "", v.strip(), flags=re.I)
     out = pd.to_numeric(pd.Series([v]), errors="coerce").iloc[0]
     return None if pd.isna(out) else float(out)
 
 
 def norm(v):
-    """Case-, whitespace- and punctuation-insensitive key for exact matching."""
+    """Case- and whitespace-insensitive key for exact matching."""
     return re.sub(r"\s+", " ", str(v)).strip().casefold() if not blank(v) else ""
 
 
